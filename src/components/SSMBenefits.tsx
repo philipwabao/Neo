@@ -27,7 +27,7 @@ export default function SSMBenefits() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="max-w-2xl text-left md:text-center mx-auto mb-12 md:mb-16">
-          <p className="text-[0.65rem] font-mono tracking-[0.2em] uppercase text-[#B8541F]">
+          <p className="field-label text-[#B8541F]">
             Use cases
           </p>
           <h2 className="mt-4 text-2xl md:text-3xl lg:text-4xl font-sans font-semibold tracking-tight leading-tight">
@@ -56,7 +56,7 @@ export default function SSMBenefits() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-[#E6E1D6] border border-[#E6E1D6] rounded-xl overflow-hidden">
             {VALUE.map(([n, k, h, b]) => (
               <div key={n} className="bg-white p-6 md:p-7 flex flex-col">
-                <p className="text-[0.55rem] font-mono tracking-[0.2em] uppercase text-[#B8541F]">
+                <p className="field-label text-[#B8541F]">
                   {n} · {k}
                 </p>
                 <h4 className="mt-2 text-base md:text-lg font-sans font-semibold tracking-tight">
@@ -71,7 +71,7 @@ export default function SSMBenefits() {
         {/* Speed & cost + accuracy */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12 lg:gap-20 items-center">
           <div>
-            <p className="text-[0.65rem] font-mono tracking-[0.2em] uppercase text-[#B8541F]">
+            <p className="field-label text-[#B8541F]">
               Speed &amp; cost
             </p>
             <h2 className="mt-4 text-3xl md:text-4xl font-sans font-semibold tracking-tight leading-[1.1]">
@@ -87,7 +87,7 @@ export default function SSMBenefits() {
           {/* Accuracy */}
           <div className="bg-white border border-[#E6E1D6] rounded-xl p-6 md:p-8 w-full">
             <div className="mb-7 border-b border-[#E6E1D6] pb-5">
-              <h4 className="text-[0.7rem] font-mono uppercase tracking-[0.1em] font-semibold text-[#1A1815]">
+              <h4 className="field-label text-[#1A1815]">
                 Classification accuracy
               </h4>
               <p className="text-[0.65rem] font-mono text-[#928C82] mt-1">
@@ -99,7 +99,7 @@ export default function SSMBenefits() {
               {ACCURACY.map((a) => (
                 <div key={a.label}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[0.65rem] font-mono text-[#4A463F] uppercase tracking-wide">
+                    <span className="field-label text-[#4A463F]">
                       {a.label}
                     </span>
                     <span className="text-[0.65rem] font-mono text-[#1A1815] font-semibold">
@@ -116,7 +116,7 @@ export default function SSMBenefits() {
               ))}
             </div>
 
-            <p className="mt-6 pt-5 border-t border-[#E6E1D6] text-[0.6rem] leading-relaxed text-[#928C82]">
+            <p className="mt-6 footnote">
               These figures are illustrative, not a measured benchmark. Accuracy on
               your data is established per deployment, before anything goes live.
             </p>

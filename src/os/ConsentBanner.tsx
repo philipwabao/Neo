@@ -46,7 +46,7 @@ export function ConsentBanner() {
     <div ref={wrapRef} className="fixed inset-x-0 bottom-0 z-[1150] flex justify-center px-3 pb-3 pointer-events-none">
       <div
         className="pointer-events-auto w-full max-w-2xl rounded-xl border border-[#E6E1D6] bg-[#F5F2EB]/95 backdrop-blur-xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center gap-3 md:gap-5"
-        style={{ boxShadow: '0 -2px 4px rgba(26,24,21,0.04), 0 24px 60px -24px rgba(26,24,21,0.5)' }}
+        style={{ boxShadow: 'var(--elev-5)' }}
         role="dialog"
         aria-label="Cookie consent"
       >

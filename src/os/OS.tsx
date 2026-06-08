@@ -1,5 +1,5 @@
 import { useReducer, useRef, useEffect, useState, useCallback } from 'react'
-import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import type { PointerEvent as ReactPointerEvent, TransitionEvent as ReactTransitionEvent, ReactNode } from 'react'
 import { APPS, KESTREL_TABS, type AppDef } from './apps'
 import { FlockMark } from '../components/Hero'
 import { OSContext } from './osctx'
@@ -83,9 +83,15 @@ function reducer(s: State, a: Action): State {
   }
 }
 
-/* one transition drives open / close / minimize / restore / zoom; pointer drags switch it off live */
+/* two transitions, composed from the :root motion tokens (index.css). The press
+   curve is the clean default (close / minimize / zoom / restore); the open curve
+   gives the transform a settle-spring so a plate lands with a little overshoot.
+   The spring is on transform ONLY - width/height stay press so app bodies never
+   reflow/jiggle. Pointer drags switch transitions off live (rAF path). */
 const TRANSITION =
-  'transform 380ms cubic-bezier(0.16,1,0.3,1), width 360ms cubic-bezier(0.16,1,0.3,1), height 360ms cubic-bezier(0.16,1,0.3,1), opacity 220ms ease'
+  'transform var(--dur-glide) var(--ease-press), width 360ms var(--ease-press), height 360ms var(--ease-press), opacity 220ms ease, box-shadow var(--dur-glide) var(--ease-press)'
+const TRANSITION_OPEN =
+  'transform var(--dur-glide) var(--ease-settle), width 360ms var(--ease-press), height 360ms var(--ease-press), opacity 220ms ease, box-shadow var(--dur-glide) var(--ease-press)'
 
 const DownChevron = (
   <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none"><path d="M3.5 5 L6 7.5 L8.5 5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -96,6 +102,29 @@ const Expand = (
 const Cross = (
   <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none"><path d="M3.5 3.5 L8.5 8.5 M8.5 3.5 L3.5 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>
 )
+
+/* the accession chip - one stamped code (app.code) reused in the window
+   running-head, the header cabinet index, the palette rows, and the mobile
+   sheet, so the whole OS coheres around a real data field. `dark` for the
+   ink header bar; the light variant for paper surfaces. */
+function EtchedChip({ code, dark = false }: { code: string; dark?: boolean }) {
+  return (
+    <span
+      className={
+        'field-label shrink-0 inline-flex items-center rounded-[4px] px-1.5 py-0.5 tracking-[0.14em] ' +
+        (dark ? 'text-[#C8C1B4]' : 'text-[#6B6760]')
+      }
+      style={{
+        fontSize: '0.55rem',
+        background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(230,225,214,0.6)',
+        border: dark ? '1px solid rgba(255,255,255,0.10)' : '1px solid #DDD7CA',
+        boxShadow: dark ? 'inset 0 1px 0 rgba(255,255,255,0.08)' : 'inset 0 1px 0 rgba(255,255,255,0.7)',
+      }}
+    >
+      {code}
+    </span>
+  )
+}
 
 type IconMap = { current: Record<string, { x: number; y: number }> }
 
@@ -176,7 +205,7 @@ function PlateWindow({ app, win, focused, dispatch, iconPos }: { app: AppDef; wi
       aria-label={label}
       onClick={onClick}
       className={
-        'w-5 h-5 flex items-center justify-center rounded-[3px] transition-colors ' +
+        'w-5 h-5 flex items-center justify-center rounded-[3px] transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-90 ' +
         (focused ? 'text-[#807A70] ' : 'text-[#CCC6BA] ') +
         (accent ? 'hover:text-[#B8541F] hover:bg-[#F4E3DA]' : 'hover:text-[#1A1815] hover:bg-[#E6E1D6]/70')
       }
@@ -189,6 +218,26 @@ function PlateWindow({ app, win, focused, dispatch, iconPos }: { app: AppDef; wi
   const target = iconPos.current[app.id] ?? { x: 48, y: 92 }
   const handle = 'absolute z-20 touch-none'
 
+  // detect the open transition (hidden -> visible) so it lands with the
+  // settle-spring and flicks the edition-frame ticks rust on arrival.
+  const prevVisible = useRef(visible)
+  const justOpened = useRef(false)
+  const isOpening = visible && !prevVisible.current
+  useEffect(() => {
+    if (isOpening) justOpened.current = true
+    else if (!visible) justOpened.current = false
+    prevVisible.current = visible
+  }, [visible])
+
+  const onTransitionEnd = (e: ReactTransitionEvent<HTMLDivElement>) => {
+    // only the plate's own transform landing, and only when it was opening,
+    // so drag-snap / zoom / restore / minimize never flick the ticks.
+    if (e.target === e.currentTarget && e.propertyName === 'transform' && justOpened.current) {
+      justOpened.current = false
+      window.dispatchEvent(new CustomEvent('neo-plate-landed'))
+    }
+  }
+
   return (
     <div
       ref={ref}
@@ -196,24 +245,23 @@ function PlateWindow({ app, win, focused, dispatch, iconPos }: { app: AppDef; wi
       aria-label={visible ? app.title : undefined}
       inert={!visible}
       onPointerDown={() => dispatch({ t: 'focus', id: app.id })}
+      onTransitionEnd={onTransitionEnd}
       className="absolute top-0 left-0 flex flex-col rounded-[5px] bg-white border border-[#E6E1D6] overflow-hidden"
       style={{
         width: win.w,
         height: win.h,
         zIndex: win.z,
-        transformOrigin: '0 0',
-        transform: visible
-          ? `translate3d(${win.x}px,${win.y}px,0) scale(1)`
-          : `translate3d(${target.x}px,${target.y}px,0) scale(0.04)`,
+        // pivot the scale at the icon's centroid (relative to the window's
+        // top-left) so the plate homes into / out of its own tile.
+        transformOrigin: `${target.x - win.x}px ${target.y - win.y}px`,
+        transform: `translate3d(${win.x}px,${win.y}px,0) scale(${visible ? 1 : 0.04})`,
         opacity: visible ? (focused ? 1 : 0.985) : 0,
         pointerEvents: visible ? 'auto' : 'none',
-        transition: TRANSITION,
-        boxShadow: focused
-          ? '0 2px 4px rgba(26,24,21,0.05), 0 28px 64px -22px rgba(26,24,21,0.34)'
-          : '0 10px 30px -16px rgba(26,24,21,0.22)',
+        transition: isOpening ? TRANSITION_OPEN : TRANSITION,
+        boxShadow: focused ? 'var(--elev-5)' : 'var(--elev-2)',
       }}
     >
-      {/* printed caption strip */}
+      {/* printed running head: title (struck in when focused) | accession | folio */}
       <div
         onPointerDown={onDown}
         onPointerMove={onMove}
@@ -222,9 +270,15 @@ function PlateWindow({ app, win, focused, dispatch, iconPos }: { app: AppDef; wi
         className="relative h-[34px] shrink-0 flex items-center gap-2.5 px-3 bg-[#EFEBE2] border-b border-[#E6E1D6]"
         style={{ touchAction: 'none', cursor: 'default', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)' }}
       >
-        <span className={'font-sans text-[13px] font-semibold tracking-tight truncate ' + (focused ? 'text-[#1A1815]' : 'text-[#6B6760]')}>{app.title}</span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[#928C82] shrink-0 hidden sm:inline">{app.code}</span>
-        <span className="flex-1" />
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="relative shrink min-w-0">
+            <span className={'block truncate font-sans text-[13px] font-medium tracking-tight ' + (focused ? 'text-[#1A1815] deboss' : 'text-[#6B6760]')}>{app.title}</span>
+            <span aria-hidden className="absolute left-0 -bottom-[3px] h-[1.5px] rounded-full bg-[#B8541F]" style={{ width: focused ? 18 : 0, transition: 'width var(--dur-glide) var(--ease-press)' }} />
+          </span>
+          <span aria-hidden className="h-3.5 w-px bg-[#DDD7CA] shrink-0" />
+          <EtchedChip code={app.code} />
+        </div>
+        <span className="flex-1 min-w-0" />
         {ctl('Minimize', () => dispatch({ t: 'min', id: app.id }), DownChevron, false)}
         {ctl(win.zoomed ? 'Restore size' : 'Zoom', () => dispatch({ t: 'zoom', id: app.id }), Expand, false)}
         {ctl('Close', () => dispatch({ t: 'close', id: app.id }), Cross, true)}
@@ -259,6 +313,10 @@ function Desktop() {
         }}
       />
       <div aria-hidden className="absolute inset-0" style={{ background: 'radial-gradient(130% 120% at 50% 24%, rgba(0,0,0,0) 52%, rgba(26,24,21,0.24) 100%)' }} />
+      {/* one lamp: a warm key-light bloom upper-left + deepened occlusion lower-right,
+          so the desktop reads as a lit bench and the elevation shadows look sourced */}
+      <div aria-hidden className="absolute inset-0" style={{ background: 'radial-gradient(58% 48% at 20% 12%, rgba(245,242,235,0.18) 0%, rgba(245,242,235,0) 62%)' }} />
+      <div aria-hidden className="absolute inset-0" style={{ background: 'radial-gradient(120% 120% at 90% 94%, rgba(26,24,21,0) 56%, rgba(26,24,21,0.16) 100%)' }} />
       <div
         aria-hidden
         className="absolute inset-0 opacity-[0.05] mix-blend-overlay"
@@ -277,7 +335,7 @@ function fmtClock(d: Date) {
 }
 
 /* ── the printed edition header ── */
-function Header({ openApp, onPalette }: { openApp: (id: string) => void; onPalette: () => void }) {
+function Header({ openApp, onPalette, focusedCode }: { openApp: (id: string) => void; onPalette: () => void; focusedCode: string | null }) {
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
@@ -286,14 +344,16 @@ function Header({ openApp, onPalette }: { openApp: (id: string) => void; onPalet
   return (
     <div className="fixed top-0 inset-x-0 z-[1000] h-12 flex items-center px-5 bg-[#1A1815] border-b border-[#2A2723]">
       <button onClick={() => openApp('kestrel')} className="inline-flex items-center gap-2 group">
-        <FlockMark className="w-[18px] h-[18px] text-[#F5F2EB] transition-transform duration-200 group-hover:-translate-y-0.5" leadStroke="#E8743A" />
+        <FlockMark className="w-[18px] h-[18px] text-[#F5F2EB] transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 group-active:translate-y-0 group-active:scale-[0.96]" leadStroke="#E8743A" />
         <span className="font-sans text-[15px] font-semibold tracking-[-0.01em] text-[#F5F2EB]">Neognathae</span>
       </button>
+      {/* live cabinet index: the accession of the focused plate */}
+      {focusedCode && <span className="hidden md:inline-flex ml-3"><EtchedChip code={focusedCode} dark /></span>}
       <span className="absolute left-1/2 -translate-x-1/2 font-mono font-bold text-[10px] uppercase tracking-[0.26em] text-[#F5F2EB] hidden md:inline">
         2026
       </span>
       <div className="ml-auto flex items-center gap-3.5">
-        <button onClick={onPalette} aria-label="Open command palette" title="Command palette (⌘K)" className="hidden sm:inline-flex items-center rounded-md border border-[#3A352F] px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-[0.12em] text-[#F5F2EB] hover:border-[#4A453F] transition-colors">D</button>
+        <button onClick={onPalette} aria-label="Open command palette" title="Command palette (⌘K)" className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-[#3A352F] px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-[0.12em] text-[#CFC8BB] hover:text-[#F5F2EB] hover:border-[#4A453F] active:scale-95 transition-[color,border-color,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]"><span aria-hidden className="text-[#807A70]">⌘</span>K</button>
         <span className="font-mono font-bold text-[11px] uppercase tracking-[0.14em] text-[#F5F2EB] tabular-nums">{fmtClock(now)}</span>
       </div>
     </div>
@@ -302,13 +362,32 @@ function Header({ openApp, onPalette }: { openApp: (id: string) => void; onPalet
 
 /* ── edition border + corner ticks (the plate frame) ── */
 function PlateFrame() {
-  const tick = (pos: string) => <span aria-hidden className={'absolute w-3 h-3 ' + pos} style={{ borderColor: 'rgba(26,24,21,0.28)' }} />
+  // the four corner ticks flick rust for one --dur-tap on a plate landing or
+  // a palette opening - one shared registration "click" for the whole OS.
+  const [flash, setFlash] = useState(0)
+  useEffect(() => {
+    const onLand = () => setFlash((n) => n + 1)
+    window.addEventListener('neo-plate-landed', onLand)
+    window.addEventListener('neo-palette-landed', onLand)
+    return () => {
+      window.removeEventListener('neo-plate-landed', onLand)
+      window.removeEventListener('neo-palette-landed', onLand)
+    }
+  }, [])
+  // ticks borrow currentColor; animating the group's color flicks all four.
+  const tick = (pos: string) => <span aria-hidden className={'absolute w-3 h-3 ' + pos} style={{ borderColor: 'currentColor' }} />
   return (
     <div aria-hidden className="fixed inset-2.5 z-[1100] pointer-events-none rounded-[5px] border border-[#1A1815]/[0.12]">
-      {tick('left-1.5 top-1.5 border-l border-t')}
-      {tick('right-1.5 top-1.5 border-r border-t')}
-      {tick('left-1.5 bottom-1.5 border-l border-b')}
-      {tick('right-1.5 bottom-1.5 border-r border-b')}
+      <div
+        key={flash}
+        className="absolute inset-0"
+        style={{ color: 'var(--tick)', animation: flash ? 'tick-flash var(--dur-tap) var(--ease-press)' : undefined }}
+      >
+        {tick('left-1.5 top-1.5 border-l border-t')}
+        {tick('right-1.5 top-1.5 border-r border-t')}
+        {tick('left-1.5 bottom-1.5 border-l border-b')}
+        {tick('right-1.5 bottom-1.5 border-r border-b')}
+      </div>
     </div>
   )
 }
@@ -316,16 +395,19 @@ function PlateFrame() {
 /* ── command palette (⌘K) ── */
 function Palette({ openApp, close }: { openApp: (id: string) => void; close: () => void }) {
   const [q, setQ] = useState('')
+  useEffect(() => { window.dispatchEvent(new CustomEvent('neo-palette-landed')) }, [])
   const appActions = APPS.map((a) => ({
     key: 'app:' + a.id,
     label: a.title,
     hint: 'app',
+    code: a.code as string | null,
     run: () => openApp(a.id),
   }))
   const tabActions = KESTREL_TABS.map((t) => ({
     key: 'tab:' + t,
     label: t,
     hint: 'Kestrel',
+    code: null as string | null,
     run: () => { openApp('kestrel'); window.dispatchEvent(new CustomEvent('neo-tab', { detail: t })) },
   }))
   const actions = [...appActions, ...tabActions]
@@ -333,10 +415,10 @@ function Palette({ openApp, close }: { openApp: (id: string) => void; close: () 
   const fire = (a: (typeof actions)[number]) => { a.run(); close() }
   return (
     <div className="fixed inset-0 z-[1200] flex items-start justify-center pt-[16vh] px-4" onClick={close}>
-      <div className="absolute inset-0 bg-[#1A1815]/25 backdrop-blur-[2px]" />
+      <div className="absolute inset-0 bg-[#1A1815]/25 backdrop-blur-[2px]" style={{ animation: 'page-load var(--dur-tap) ease' }} />
       <div
-        className="relative w-full max-w-md rounded-xl bg-[#F5F2EB]/95 backdrop-blur-2xl border border-[#E6E1D6] overflow-hidden"
-        style={{ boxShadow: '0 30px 80px -22px rgba(26,24,21,0.5)' }}
+        className="relative w-full max-w-md rounded-xl bg-[#F5F2EB]/95 backdrop-blur-md border border-[#E6E1D6] overflow-hidden"
+        style={{ boxShadow: 'var(--elev-5)', animation: 'palette-rise var(--dur-glide) var(--ease-settle)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -349,11 +431,11 @@ function Palette({ openApp, close }: { openApp: (id: string) => void; close: () 
           aria-label="Command palette"
         />
         <div className="neo-scroll max-h-72 overflow-auto py-1.5">
-          {filtered.map((a) => (
-            <button key={a.key} onClick={() => fire(a)} className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-[#E6E1D6]/55 transition-colors">
-              <span className="font-mono text-[11px] text-[#B8541F] w-3 shrink-0">›</span>
+          {filtered.map((a, i) => (
+            <button key={a.key} onClick={() => fire(a)} style={{ animationDelay: (i < 8 ? i * 22 : 0) + 'ms' }} className="tab-fade w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-[#E6E1D6]/55 transition-colors">
+              {a.code ? <EtchedChip code={a.code} /> : <span className="field-label text-[#B8541F] w-3 shrink-0 text-center">§</span>}
               <span className="flex-1 text-[14px] text-[#1A1815]">{a.label}</span>
-              <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#928C82]">{a.hint}</span>
+              <span className="field-label">{a.hint}</span>
             </button>
           ))}
           {filtered.length === 0 && <p className="px-4 py-3 text-sm text-[#928C82]">No matches.</p>}
@@ -366,24 +448,24 @@ function Palette({ openApp, close }: { openApp: (id: string) => void; close: () 
 /* ── desktop app icons (press to open, drag to move) ── */
 const KestrelTile = (
   <span
-    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-white/30 flex items-center justify-center transition-transform duration-200 group-hover:-translate-y-0.5"
-    style={{ backgroundImage: 'url(/kestrel-plate.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.25)' }}
+    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-white/30 flex items-center justify-center transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 group-active:translate-y-0 group-active:scale-[0.96]"
+    style={{ backgroundImage: 'url(/kestrel-plate.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', boxShadow: 'var(--elev-3), inset 0 1px 0 rgba(255,255,255,0.25)' }}
   >
     <span className="font-sans font-semibold text-[#F8F5EF] text-[1.5rem] leading-none" style={{ textShadow: '0 1px 5px rgba(0,0,0,0.5)' }}>K</span>
   </span>
 )
 const TerminalTile = (
   <span
-    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-white/15 flex items-center justify-center transition-transform duration-200 group-hover:-translate-y-0.5"
-    style={{ background: 'linear-gradient(160deg, #211E1A 0%, #14110E 100%)', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-white/15 flex items-center justify-center transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 group-active:translate-y-0 group-active:scale-[0.96]"
+    style={{ background: 'linear-gradient(160deg, #211E1A 0%, #14110E 100%)', boxShadow: 'var(--elev-3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
   >
     <span className="font-mono text-[1.1rem] leading-none text-[#E8743A]">›<span className="text-[#F5F2EB]">_</span></span>
   </span>
 )
 const CatalogueTile = (
   <span
-    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-[#E6E1D6] flex items-center justify-center transition-transform duration-200 group-hover:-translate-y-0.5"
-    style={{ background: 'linear-gradient(160deg, #FBF9F4 0%, #ECE7DC 100%)', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.7)' }}
+    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-[#E6E1D6] flex items-center justify-center transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 group-active:translate-y-0 group-active:scale-[0.96]"
+    style={{ background: 'linear-gradient(160deg, #FBF9F4 0%, #ECE7DC 100%)', boxShadow: 'var(--elev-3), inset 0 1px 0 rgba(255,255,255,0.7)' }}
   >
     <FlockMark className="w-7 h-7 text-[#1A1815]" leadStroke="#B8541F" />
   </span>
@@ -391,28 +473,28 @@ const CatalogueTile = (
 
 const ContactTile = (
   <span
-    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-[#E6E1D6] flex items-center justify-center transition-transform duration-200 group-hover:-translate-y-0.5"
-    style={{ background: 'linear-gradient(160deg, #FBF9F4 0%, #ECE7DC 100%)', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.7)' }}
+    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-[#E6E1D6] flex items-center justify-center transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 group-active:translate-y-0 group-active:scale-[0.96]"
+    style={{ background: 'linear-gradient(160deg, #FBF9F4 0%, #ECE7DC 100%)', boxShadow: 'var(--elev-3), inset 0 1px 0 rgba(255,255,255,0.7)' }}
   >
     <span className="font-sans text-[1.65rem] leading-none text-[#B8541F]">@</span>
   </span>
 )
 const AuxertaTile = (
   <span
-    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-white/10 transition-transform duration-200 group-hover:-translate-y-0.5"
-    style={{ backgroundColor: '#080A11', backgroundImage: 'url(/icon.svg)', backgroundSize: 'cover', backgroundPosition: 'center', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-white/10 transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 group-active:translate-y-0 group-active:scale-[0.96]"
+    style={{ backgroundColor: '#080A11', backgroundImage: 'url(/icon.svg)', backgroundSize: 'cover', backgroundPosition: 'center', boxShadow: 'var(--elev-3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
   />
 )
 const PrivacyTile = (
   <span
-    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-white/10 transition-transform duration-200 group-hover:-translate-y-0.5"
-    style={{ backgroundImage: 'url(/privacy-bittern.jpg)', backgroundSize: '152%', backgroundPosition: 'center 40%', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)' }}
+    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-white/10 transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 group-active:translate-y-0 group-active:scale-[0.96]"
+    style={{ backgroundImage: 'url(/privacy-bittern.jpg)', backgroundSize: '152%', backgroundPosition: 'center 40%', boxShadow: 'var(--elev-3), inset 0 1px 0 rgba(255,255,255,0.12)' }}
   />
 )
 const TermsTile = (
   <span
-    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-[#E6E1D6] flex items-center justify-center transition-transform duration-200 group-hover:-translate-y-0.5"
-    style={{ background: 'linear-gradient(160deg, #FBF9F4 0%, #ECE7DC 100%)', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.7)' }}
+    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-[#E6E1D6] flex items-center justify-center transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 group-active:translate-y-0 group-active:scale-[0.96]"
+    style={{ background: 'linear-gradient(160deg, #FBF9F4 0%, #ECE7DC 100%)', boxShadow: 'var(--elev-3), inset 0 1px 0 rgba(255,255,255,0.7)' }}
   >
     <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" aria-hidden>
       <rect x="5.5" y="3.5" width="13" height="17" rx="2.5" stroke="#1A1815" strokeWidth="1.6" />
@@ -424,8 +506,8 @@ const TermsTile = (
 )
 const NewsTile = (
   <span
-    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-[#E6E1D6] flex items-center justify-center transition-transform duration-200 group-hover:-translate-y-0.5"
-    style={{ background: 'linear-gradient(160deg, #FBF9F4 0%, #ECE7DC 100%)', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.7)' }}
+    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-[#E6E1D6] flex items-center justify-center transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 group-active:translate-y-0 group-active:scale-[0.96]"
+    style={{ background: 'linear-gradient(160deg, #FBF9F4 0%, #ECE7DC 100%)', boxShadow: 'var(--elev-3), inset 0 1px 0 rgba(255,255,255,0.7)' }}
   >
     <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" aria-hidden>
       <rect x="4" y="5.5" width="16" height="13" rx="2" stroke="#1A1815" strokeWidth="1.6" />
@@ -434,6 +516,19 @@ const NewsTile = (
       <line x1="13.5" y1="11.2" x2="17.5" y2="11.2" stroke="#1A1815" strokeWidth="1.3" strokeLinecap="round" />
       <line x1="6.5" y1="14.6" x2="17.5" y2="14.6" stroke="#1A1815" strokeWidth="1.3" strokeLinecap="round" />
       <line x1="6.5" y1="16.4" x2="14" y2="16.4" stroke="#1A1815" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  </span>
+)
+
+const MazeTile = (
+  <span
+    className="relative w-14 h-14 rounded-[16px] overflow-hidden border border-[#E6E1D6] flex items-center justify-center transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 group-active:translate-y-0 group-active:scale-[0.96]"
+    style={{ background: 'linear-gradient(160deg, #FBF9F4 0%, #ECE7DC 100%)', boxShadow: 'var(--elev-3), inset 0 1px 0 rgba(255,255,255,0.7)' }}
+  >
+    <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" aria-hidden>
+      <rect x="4" y="4" width="16" height="16" rx="2" stroke="#1A1815" strokeWidth="1.6" />
+      <path d="M4 9 H15 M9 4 V15 M9 15 H20 M15 9 V20 M15 15 H20" stroke="#1A1815" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="6.5" cy="6.5" r="1.1" fill="#B8541F" />
     </svg>
   </span>
 )
@@ -448,6 +543,7 @@ const DESKTOP_ICONS: IconDef[] = [
   { id: 'privacy', label: 'Privacy', y: 256, side: 'left', tile: PrivacyTile },
   { id: 'terms', label: 'Terms', y: 352, side: 'left', tile: TermsTile },
   { id: 'news', label: 'News', y: 352, side: 'right', tile: NewsTile },
+  { id: 'maze', label: 'Maze', y: 448, side: 'left', tile: MazeTile },
 ]
 function iconStartX(icon: IconDef): number {
   if (icon.side === 'right') {
@@ -540,8 +636,9 @@ function MobileSheet({ app, visible, dispatch, bannerH }: { app: AppDef; visible
       aria-label={visible ? app.title : undefined}
     >
       <div className="shrink-0 h-11 flex items-center gap-2.5 px-4 bg-[#EFEBE2] border-b border-[#E6E1D6]" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)' }}>
-        <span className="font-sans text-[14px] font-semibold tracking-tight text-[#1A1815] truncate">{app.title}</span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[#928C82] shrink-0">{app.code}</span>
+        <span className="font-sans text-[14px] font-medium tracking-tight text-[#1A1815] deboss truncate">{app.title}</span>
+        <span aria-hidden className="h-3.5 w-px bg-[#DDD7CA] shrink-0" />
+        <EtchedChip code={app.code} />
         <span className="flex-1" />
         <button aria-label="Close" onClick={() => dispatch({ t: 'close', id: app.id })} className="w-7 h-7 flex items-center justify-center rounded-full text-[#807A70] hover:text-[#B8541F] hover:bg-[#F4E3DA] transition-colors">{Cross}</button>
       </div>
@@ -559,7 +656,7 @@ function MobileHome({ openApp }: { openApp: (id: string) => void }) {
             key={icon.id}
             onClick={() => openApp(icon.id)}
             aria-label={'Open ' + icon.label}
-            className="group flex flex-col items-center gap-2 active:scale-95 transition-transform"
+            className="group flex flex-col items-center gap-2 active:scale-95 transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]"
           >
             {icon.tile}
             <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#F5F2EB]" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.65)' }}>{icon.label}</span>
@@ -645,6 +742,8 @@ export default function OS() {
     if (isMobile && state.focused === 'terminal') dispatch({ t: 'close', id: 'terminal' })
   }, [isMobile, state.focused])
 
+  const focusedCode = state.focused ? APPS.find((a) => a.id === state.focused)?.code ?? null : null
+
   return (
     <OSContext.Provider value={{ openApp }}>
       <div className="fixed inset-0 overflow-hidden select-none" style={{ background: '#F5F2EB' }}>
@@ -666,7 +765,7 @@ export default function OS() {
             </div>
           </>
         )}
-        <Header openApp={openApp} onPalette={() => setPalette(true)} />
+        <Header openApp={openApp} onPalette={() => setPalette(true)} focusedCode={focusedCode} />
         {!isMobile && <PlateFrame />}
         <ConsentBanner />
         {palette && <Palette openApp={openApp} close={() => setPalette(false)} />}

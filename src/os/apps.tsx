@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { ReactNode, ComponentType } from 'react'
 import { FlockMark, SpecimenPlate, KestrelCard, ComingSoonCard } from '../components/Hero'
 import ClassifierDemo from '../components/ClassifierDemo'
 import SSMBenefits from '../components/SSMBenefits'
+import { recordMazeRun } from './telemetry'
 
 export type AppDef = {
   id: string
@@ -16,7 +17,26 @@ export type AppDef = {
 }
 
 function Eyebrow({ children }: { children: ReactNode }) {
-  return <p className="text-[0.62rem] font-mono uppercase tracking-[0.24em] text-[#B8541F]">{children}</p>
+  return <p className="field-label text-[#B8541F]">{children}</p>
+}
+
+/* shared masthead - every window opens like a catalogue page: rust kicker,
+   Fraunces headline, then a hair rule with an ember registration tick at its
+   left (echoing FlockMark's ember lead shard). The rule is decorative and
+   aria-hidden; the chrome caption is a <span>, so this <h2> is the page's
+   first heading and introduces no redundant heading level. */
+function PageHead({ kicker, title, meta, display = false, icon }: { kicker: string; title: string; meta?: ReactNode; display?: boolean; icon?: ReactNode }) {
+  return (
+    <header className="mb-6">
+      {icon && <div className="mb-3">{icon}</div>}
+      <p className="field-label text-[#B8541F]">{kicker}</p>
+      <h2 className={(display ? 't-display' : 't-title') + ' mt-2 text-[#1A1815]'}>{title}</h2>
+      {meta && <div className="mt-2">{meta}</div>}
+      <div aria-hidden className="mt-5 relative h-px bg-[#E6E1D6]">
+        <span className="absolute left-0 -top-[2px] h-[5px] w-[5px] rounded-full bg-[#E8743A]" />
+      </div>
+    </header>
+  )
 }
 
 /* ── Terminal: a small archive you can walk (ls / cd / cat / tree) ── */
@@ -736,18 +756,18 @@ function Insights() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-[#E6E1D6] border border-[#E6E1D6] rounded-xl overflow-hidden">
         <div className="bg-white p-5">
-          <p className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[#928C82]">Classification accuracy</p>
+          <p className="field-label">Classification accuracy</p>
           <div className="mt-4 space-y-3">
             {ACC.map(([label, pct]) => (
               <div key={label}>
-                <div className="flex justify-between mb-1.5"><span className="text-[0.65rem] font-mono uppercase tracking-wide text-[#4A463F]">{label}</span><span className="text-[0.65rem] font-mono text-[#1A1815] font-semibold">{pct}.0%</span></div>
+                <div className="flex justify-between mb-1.5"><span className="field-label text-[#4A463F]">{label}</span><span className="text-[0.65rem] font-mono text-[#1A1815] font-semibold">{pct}.0%</span></div>
                 <div className="w-full h-2 rounded-full bg-[#ECE8DF] overflow-hidden"><div className="h-full rounded-full bg-[#B8541F] transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]" style={{ width: shown ? `${pct}%` : '0%' }} /></div>
               </div>
             ))}
           </div>
         </div>
         <div className="bg-white p-5">
-          <p className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[#928C82]">Throughput · illustrative</p>
+          <p className="field-label">Throughput · illustrative</p>
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="mt-4 w-full h-[120px]">
             <polyline points={`0,100 ${pts} 100,100`} fill="#B8541F" opacity={shown ? 0.06 : 0} style={{ transition: 'opacity 700ms' }} />
             <polyline points={pts} fill="none" stroke="#B8541F" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'all 700ms cubic-bezier(0.16,1,0.3,1)', opacity: shown ? 1 : 0 }} />
@@ -759,18 +779,18 @@ function Insights() {
             <circle cx="43" cy="43" r={r} fill="none" stroke="#B8541F" strokeWidth="9" strokeLinecap="round" transform="rotate(-90 43 43)" style={{ transition: 'stroke-dasharray 700ms cubic-bezier(0.16,1,0.3,1)', strokeDasharray: shown ? `${circ * frac} ${circ}` : `0 ${circ}` }} />
           </svg>
           <div>
-            <p className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[#928C82]">The models</p>
+            <p className="field-label">The models</p>
             <p className="mt-2 font-sans text-lg font-semibold text-[#1A1815]">01 in production</p>
             <p className="text-sm text-[#6B6760]">07 in development</p>
           </div>
         </div>
         <div className="bg-white p-5 flex flex-col justify-center">
-          <p className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[#928C82]">Response time</p>
+          <p className="field-label">Response time</p>
           <p className="mt-2 font-sans text-3xl font-semibold tracking-tight text-[#1A1815]">~18<span className="text-lg text-[#928C82]"> ms</span></p>
           <p className="mt-1 text-xs text-[#807A70]">Illustrative. Established per deployment.</p>
         </div>
       </div>
-      <p className="mt-4 text-[0.6rem] font-mono uppercase tracking-[0.16em] text-[#928C82]">Figures are illustrative; accuracy on customer data is established per deployment.</p>
+      <p className="mt-4 footnote">Figures are illustrative; accuracy on customer data is established per deployment.</p>
     </div>
   )
 }
@@ -831,16 +851,17 @@ function KestrelApp() {
       <section data-section="Plate" className="p-6 md:p-8 flex flex-col sm:flex-row gap-6">
         <div className="w-full sm:w-[220px] shrink-0">
           <div className="group rounded-xl overflow-hidden border border-[#E6E1D6]"><SpecimenPlate /></div>
+          <a href="https://en.wikipedia.org/wiki/Common_kestrel" target="_blank" rel="noreferrer" className="mt-2.5 inline-flex items-center gap-1.5 field-label text-[#807A70] hover:text-[#B8541F] transition-colors">Named for the kestrel <span aria-hidden>↗</span></a>
         </div>
         <div className="min-w-0">
-          <p className="inline-flex items-center gap-1.5 text-[0.62rem] font-mono uppercase tracking-[0.22em] text-[#B8541F]">
+          <p className="inline-flex items-center gap-1.5 field-label text-[#B8541F]">
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#B8541F]" /> NEO-001 · Kestrel
           </p>
           <h2 className="mt-3 font-sans text-2xl md:text-[1.8rem] font-semibold tracking-tight leading-tight text-[#1A1815]">A classifier, fine-tuned to your data.</h2>
           <p className="mt-3 text-sm md:text-[0.95rem] leading-relaxed text-[#4A463F]">Kestrel is a custom text classifier, trained on your labels and your terminology, then served behind a private API. Send text in; get back a label and a confidence score in milliseconds.</p>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <a href="mailto:contact@auxerta.com?subject=Kestrel%20-%20Inquiry" className="inline-flex items-center gap-2 rounded-full bg-[#1A1815] px-4 py-2 text-[0.72rem] font-medium text-[#F5F2EB] hover:bg-[#2A2723] transition-colors">Talk to us <span aria-hidden>→</span></a>
-            <button onClick={() => scrollToSection('Try it')} className="inline-flex items-center gap-1.5 font-mono text-[0.62rem] uppercase tracking-[0.16em] text-[#1A1815] hover:text-[#B8541F] transition-colors">Try it <span aria-hidden>↓</span></button>
+            <button onClick={() => scrollToSection('Try it')} className="inline-flex items-center gap-1.5 field-label text-[#1A1815] hover:text-[#B8541F] transition-colors">Try it <span aria-hidden>↓</span></button>
           </div>
         </div>
       </section>
@@ -889,7 +910,7 @@ function KestrelApp() {
           ))}
         </div>
         <div className="mt-7 pt-5 border-t border-[#E6E1D6]">
-          <button onClick={() => window.dispatchEvent(new CustomEvent('neo-open', { detail: 'privacy' }))} className="inline-flex items-center gap-1.5 font-mono text-[0.62rem] uppercase tracking-[0.16em] text-[#1A1815] hover:text-[#B8541F] transition-colors">Read the site privacy policy <span aria-hidden>→</span></button>
+          <button onClick={() => window.dispatchEvent(new CustomEvent('neo-open', { detail: 'privacy' }))} className="inline-flex items-center gap-1.5 field-label text-[#1A1815] hover:text-[#B8541F] transition-colors">Read the site privacy policy <span aria-hidden>→</span></button>
         </div>
       </section>
 
@@ -897,9 +918,9 @@ function KestrelApp() {
 
       <section data-section="About" className="p-7 md:p-9 border-t border-[#E6E1D6]">
         <FlockMark className="w-8 h-8 text-[#1A1815]" leadStroke="#B8541F" />
-        <h2 className="mt-5 font-sans text-2xl md:text-3xl font-semibold tracking-tight leading-tight text-[#1A1815]">A line of single-task models.</h2>
+        <h2 className="mt-5 t-display text-[#1A1815]">A line of single-task models.</h2>
         <p className="mt-4 text-sm md:text-base leading-relaxed text-[#4A463F] max-w-md">Neognathae is a line of narrow, single-task AI models developed by the research lab Auxerta. Each model is built for one task and fine-tuned to perform it. Kestrel, for text classification, is the first in production.</p>
-        <div className="mt-7 pt-5 border-t border-[#E6E1D6] flex flex-wrap items-center gap-x-5 gap-y-2 text-[0.62rem] font-mono uppercase tracking-[0.16em] text-[#928C82]">
+        <div className="mt-7 pt-5 border-t border-[#E6E1D6] flex flex-wrap items-center gap-x-5 gap-y-2 field-label">
           <span>Neognathae · A product by Auxerta</span>
           <a href="mailto:contact@auxerta.com" className="text-[#1A1815] hover:text-[#B8541F] transition-colors">contact@auxerta.com</a>
           <a href="https://auxerta.com" target="_blank" rel="noreferrer" className="text-[#1A1815] hover:text-[#B8541F] transition-colors">Auxerta ↗</a>
@@ -914,9 +935,8 @@ function CatalogueApp() {
   return (
     <div className="neo-scroll h-full overflow-auto bg-white">
       <div className="p-6 md:p-7">
-        <Eyebrow>The models</Eyebrow>
-        <h2 className="mt-2 font-sans text-2xl font-semibold tracking-tight text-[#1A1815]">The Neognathae models.</h2>
-        <p className="mt-2 text-sm text-[#6B6760] max-w-xl leading-relaxed">A line of narrow, single-task AI models. Kestrel is in production; the rest are in preparation. Each is built and fine-tuned for one task.</p>
+        <PageHead kicker="The models" title="The Neognathae models." display />
+        <p className="text-sm text-[#6B6760] max-w-xl leading-relaxed">A line of narrow, single-task AI models. Kestrel is in production; the rest are in preparation. Each is built and fine-tuned for one task.</p>
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <KestrelCard onOpen={() => gotoTab('Plate')} />
           {Array.from({ length: 7 }).map((_, i) => <ComingSoonCard key={i} index={i} />)}
@@ -931,19 +951,18 @@ function ContactApp() {
   return (
     <div className="neo-scroll h-full overflow-auto bg-white">
       <div className="p-7 md:p-9 max-w-xl">
-        <Eyebrow>Get in touch</Eyebrow>
-        <h2 className="mt-3 font-sans text-2xl md:text-3xl font-semibold tracking-tight text-[#1A1815]">Tell us about your text.</h2>
-        <p className="mt-4 text-sm md:text-base leading-relaxed text-[#4A463F]">
+        <PageHead kicker="Get in touch" title="Tell us about your text." />
+        <p className="text-sm md:text-base leading-relaxed text-[#4A463F]">
           The best first step is the free data evaluation. Send a note about what your text looks like and what you would like to sort it into, and we will tell you honestly whether Kestrel is a good fit.
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <a href="mailto:contact@auxerta.com?subject=Kestrel%20inquiry" className="inline-flex items-center gap-2 rounded-full bg-[#1A1815] px-5 py-2.5 text-[0.75rem] font-medium text-[#F5F2EB] hover:bg-[#2A2723] transition-colors">Email us <span aria-hidden>→</span></a>
-          <a href="https://auxerta.com" target="_blank" rel="noreferrer" className="font-mono text-[0.62rem] uppercase tracking-[0.16em] text-[#1A1815] hover:text-[#B8541F] transition-colors">auxerta.com ↗</a>
+          <a href="https://auxerta.com" target="_blank" rel="noreferrer" className="field-label text-[#1A1815] hover:text-[#B8541F] transition-colors">auxerta.com ↗</a>
         </div>
         <div className="mt-8 pt-6 border-t border-[#E6E1D6] space-y-3 text-sm">
-          <div className="flex gap-3"><span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[#928C82] w-16 shrink-0 pt-0.5">Email</span><a href="mailto:contact@auxerta.com" className="text-[#1A1815] hover:text-[#B8541F] transition-colors">contact@auxerta.com</a></div>
-          <div className="flex gap-3"><span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[#928C82] w-16 shrink-0 pt-0.5">Web</span><a href="https://auxerta.com" target="_blank" rel="noreferrer" className="text-[#1A1815] hover:text-[#B8541F] transition-colors">auxerta.com</a></div>
-          <div className="flex gap-3"><span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[#928C82] w-16 shrink-0 pt-0.5">Lab</span><span className="text-[#4A463F]">Auxerta, the research lab behind Neognathae</span></div>
+          <div className="flex gap-3"><span className="field-label w-16 shrink-0 pt-0.5">Email</span><a href="mailto:contact@auxerta.com" className="text-[#1A1815] hover:text-[#B8541F] transition-colors">contact@auxerta.com</a></div>
+          <div className="flex gap-3"><span className="field-label w-16 shrink-0 pt-0.5">Web</span><a href="https://auxerta.com" target="_blank" rel="noreferrer" className="text-[#1A1815] hover:text-[#B8541F] transition-colors">auxerta.com</a></div>
+          <div className="flex gap-3"><span className="field-label w-16 shrink-0 pt-0.5">Lab</span><span className="text-[#4A463F]">Auxerta, the research lab behind Neognathae</span></div>
         </div>
         <p className="mt-6 text-xs text-[#807A70] leading-relaxed">We take on a limited number of projects at a time, and only when we are confident we can help.</p>
       </div>
@@ -956,9 +975,8 @@ function AuxertaApp() {
   return (
     <div className="neo-scroll h-full overflow-auto bg-white">
       <div className="p-7 md:p-9 max-w-xl">
-        <Eyebrow>The lab</Eyebrow>
-        <h2 className="mt-3 font-sans text-2xl md:text-3xl font-semibold tracking-tight text-[#1A1815]">Auxerta.</h2>
-        <p className="mt-4 text-sm md:text-base leading-relaxed text-[#4A463F]">
+        <PageHead kicker="The lab" title="Auxerta." display icon={<FlockMark className="w-8 h-8 text-[#1A1815]" leadStroke="#B8541F" />} />
+        <p className="text-sm md:text-base leading-relaxed text-[#4A463F]">
           Auxerta is the research lab that develops Neognathae, a line of narrow, single-task AI models. For each model we run the full pipeline: data evaluation, in-house annotation, fine-tuning, and deployment behind a dedicated private API.
         </p>
         <p className="mt-4 text-sm md:text-base leading-relaxed text-[#4A463F]">
@@ -966,9 +984,9 @@ function AuxertaApp() {
         </p>
         <div className="mt-7 flex flex-wrap items-center gap-3">
           <a href="https://auxerta.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-[#1A1815] px-5 py-2.5 text-[0.75rem] font-medium text-[#F5F2EB] hover:bg-[#2A2723] transition-colors">Visit auxerta.com <span aria-hidden>↗</span></a>
-          <a href="mailto:contact@auxerta.com" className="font-mono text-[0.62rem] uppercase tracking-[0.16em] text-[#1A1815] hover:text-[#B8541F] transition-colors">contact@auxerta.com</a>
+          <a href="mailto:contact@auxerta.com" className="field-label text-[#1A1815] hover:text-[#B8541F] transition-colors">contact@auxerta.com</a>
         </div>
-        <div className="mt-8 pt-6 border-t border-[#E6E1D6] inline-flex items-center gap-2 text-[0.62rem] font-mono uppercase tracking-[0.16em] text-[#928C82]">
+        <div className="mt-8 pt-6 border-t border-[#E6E1D6] inline-flex items-center gap-2 field-label">
           <FlockMark className="w-4 h-4 text-[#1A1815]" leadStroke="#B8541F" />
           Neognathae, a product by Auxerta
         </div>
@@ -1018,6 +1036,9 @@ This is only a brief summary. The full, project specific data terms live in the 
 Analytics and cookies. Analytics is off until you accept it in the cookie banner, so declining keeps Google Analytics from running. You can change your choice at any time using Cookie settings below, which reopens the banner. You can also use your browser's privacy and cookie controls, clear or block cookies for this site, or install Google's Analytics opt-out browser add-on. The site works the same either way.
 
 If you have emailed us and would like us to update or delete the message and contact details you sent, just let us know at contact@auxerta.com and we will take care of it, subject to any records we are required to keep.` },
+    { heading: 'Game data', body: `Neognathae OS includes a small maze game. The first time you play, it shows a short data notice with Agree and Disagree. If you agree, the game records how it is played, the moves you make, the time between moves, the number of wrong turns, and how long each level takes, so we can study how people solve mazes and improve our models. If you disagree, the game still works and records nothing.
+
+It holds no name, no email, no message content, and nothing that identifies you. The detailed record stays in your browser, and where you have also allowed analytics an aggregate summary, such as level, size, move count, and time, is sent to our analytics. You can change your choice from the maze at any time, and clearing your browser data removes what is stored locally.` },
     { heading: 'Changes', body: 'We may update this policy from time to time. When we do, we will post the updated version here and revise the date above. Significant changes will be made clear. We encourage you to review this page from time to time.' },
     { heading: 'Contact', body: 'If you have any questions about this policy or how we handle data, email us at contact@auxerta.com. We will be glad to help, and we can provide more detail or a data processing agreement on request.' },
   ],
@@ -1030,11 +1051,9 @@ function PrivacyApp() {
   return (
     <div className="neo-scroll h-full overflow-auto bg-white">
       <div className="p-7 md:p-9 max-w-2xl">
-        <Eyebrow>Privacy</Eyebrow>
-        <h2 className="mt-3 font-sans text-2xl md:text-3xl font-semibold tracking-tight text-[#1A1815]">Privacy Policy</h2>
-        <p className="mt-2 font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[#928C82]">{PRIVACY_DOC.updated}</p>
-        <p className="mt-5 text-sm md:text-[0.95rem] leading-relaxed text-[#4A463F]">{PRIVACY_DOC.intro}</p>
-        <div className="mt-7 space-y-7">
+        <PageHead kicker="Privacy" title="Privacy Policy" meta={<p className="field-label">{PRIVACY_DOC.updated}</p>} />
+        <p className="text-sm md:text-[0.95rem] leading-relaxed text-[#4A463F] max-w-[34rem]">{PRIVACY_DOC.intro}</p>
+        <div className="mt-7 space-y-7 max-w-[34rem]">
           {PRIVACY_DOC.sections.map((s) => (
             <section key={s.heading}>
               <h3 className="font-sans text-base font-semibold tracking-tight text-[#1A1815]">{s.heading}</h3>
@@ -1043,9 +1062,9 @@ function PrivacyApp() {
           ))}
         </div>
         <div className="mt-7 pt-6 border-t border-[#E6E1D6] flex flex-wrap items-center gap-x-6 gap-y-2">
-          <button onClick={() => window.dispatchEvent(new CustomEvent('neo-consent-open'))} className="inline-flex items-center gap-1.5 font-mono text-[0.62rem] uppercase tracking-[0.16em] text-[#1A1815] hover:text-[#B8541F] transition-colors">Cookie settings</button>
-          <button onClick={() => gotoTab('Data')} className="inline-flex items-center gap-1.5 font-mono text-[0.62rem] uppercase tracking-[0.16em] text-[#1A1815] hover:text-[#B8541F] transition-colors">Kestrel data terms <span aria-hidden>→</span></button>
-          <button onClick={() => window.dispatchEvent(new CustomEvent('neo-open', { detail: 'terms' }))} className="inline-flex items-center gap-1.5 font-mono text-[0.62rem] uppercase tracking-[0.16em] text-[#1A1815] hover:text-[#B8541F] transition-colors">Terms of Service <span aria-hidden>→</span></button>
+          <button onClick={() => window.dispatchEvent(new CustomEvent('neo-consent-open'))} className="inline-flex items-center gap-1.5 field-label text-[#1A1815] hover:text-[#B8541F] transition-colors">Cookie settings</button>
+          <button onClick={() => gotoTab('Data')} className="inline-flex items-center gap-1.5 field-label text-[#1A1815] hover:text-[#B8541F] transition-colors">Kestrel data terms <span aria-hidden>→</span></button>
+          <button onClick={() => window.dispatchEvent(new CustomEvent('neo-open', { detail: 'terms' }))} className="inline-flex items-center gap-1.5 field-label text-[#1A1815] hover:text-[#B8541F] transition-colors">Terms of Service <span aria-hidden>→</span></button>
         </div>
         <p className="mt-6 text-xs text-[#807A70] leading-relaxed">
           {PRIVACY_DOC.bittern.credit}{' '}
@@ -1267,20 +1286,24 @@ function TermsApp() {
   return (
     <div className="neo-scroll h-full overflow-auto bg-white">
       <div className="p-7 md:p-9 max-w-2xl">
-        <Eyebrow>Terms</Eyebrow>
-        <h2 className="mt-3 font-sans text-2xl md:text-3xl font-semibold tracking-tight text-[#1A1815]">Terms of Service</h2>
-        <p className="mt-2 font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[#928C82]">{TERMS_DOC.updated}</p>
-        <p className="mt-5 text-sm md:text-[0.95rem] leading-relaxed text-[#4A463F] whitespace-pre-line">{TERMS_DOC.intro}</p>
-        <div className="mt-7 space-y-7">
-          {TERMS_DOC.sections.map((s) => (
-            <section key={s.heading}>
-              <h3 className="font-sans text-base font-semibold tracking-tight text-[#1A1815]">{s.heading}</h3>
-              <p className="mt-2 text-sm text-[#4A463F] leading-relaxed whitespace-pre-line">{s.body}</p>
-            </section>
-          ))}
+        <PageHead kicker="Terms" title="Terms of Service" meta={<p className="field-label">{TERMS_DOC.updated}</p>} />
+        <p className="text-sm md:text-[0.95rem] leading-relaxed text-[#4A463F] whitespace-pre-line max-w-[34rem]">{TERMS_DOC.intro}</p>
+        <div className="mt-7 space-y-7 max-w-[34rem]">
+          {TERMS_DOC.sections.map((s) => {
+            const m = s.heading.match(/^(\d+)\.\s*(.*)$/)
+            return (
+              <section key={s.heading}>
+                <h3 className="font-sans text-base font-semibold tracking-tight text-[#1A1815] flex gap-3">
+                  {m && <span aria-hidden className="field-label text-[#B8541F] shrink-0 pt-[3px] tabular-nums">{m[1].padStart(2, '0')}</span>}
+                  <span>{m ? m[2] : s.heading}</span>
+                </h3>
+                <p className="mt-2 text-sm text-[#4A463F] leading-relaxed whitespace-pre-line">{s.body}</p>
+              </section>
+            )
+          })}
         </div>
         <div className="mt-7 pt-6 border-t border-[#E6E1D6]">
-          <button onClick={() => window.dispatchEvent(new CustomEvent('neo-open', { detail: 'privacy' }))} className="inline-flex items-center gap-1.5 font-mono text-[0.62rem] uppercase tracking-[0.16em] text-[#1A1815] hover:text-[#B8541F] transition-colors">Privacy Policy <span aria-hidden>→</span></button>
+          <button onClick={() => window.dispatchEvent(new CustomEvent('neo-open', { detail: 'privacy' }))} className="inline-flex items-center gap-1.5 field-label text-[#1A1815] hover:text-[#B8541F] transition-colors">Privacy Policy <span aria-hidden>→</span></button>
         </div>
       </div>
     </div>
@@ -1302,16 +1325,244 @@ function NewsApp({ active = true }: { active?: boolean }) {
   return (
     <div className="neo-scroll h-full overflow-auto bg-white">
       <div className="p-7 md:p-9">
-        <Eyebrow>News</Eyebrow>
-        <h2 className="mt-3 font-sans text-2xl md:text-3xl font-semibold tracking-tight text-[#1A1815]">Updates.</h2>
-        <p className="mt-2 font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[#928C82] tabular-nums">As of {stamp}</p>
+        <PageHead kicker="News" title="Updates." meta={<p className="field-label tabular-nums">As of {stamp}</p>} />
         <div className="mt-8 flex flex-col items-center text-center gap-3 py-16 px-6 border border-dashed border-[#E6E1D6] rounded-xl bg-[#FBF9F4]">
           <FlockMark className="w-10 h-10 text-[#DCD6C9]" />
           <p className="font-sans text-lg font-semibold text-[#928C82]">No updates yet</p>
           <p className="text-sm text-[#807A70] max-w-xs leading-relaxed">Auxerta announcements and product updates will appear here.</p>
-          <span className="mt-1 inline-flex items-center gap-1.5 font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[#928C82]"><span aria-hidden className="h-1.5 w-1.5 rounded-full border border-[#CCC6BA]" /> In preparation</span>
+          <span className="mt-1 inline-flex items-center gap-1.5 field-label"><span aria-hidden className="h-1.5 w-1.5 rounded-full border border-[#CCC6BA]" /> In preparation</span>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ── Maze (an endless, randomly generated labyrinth) ── */
+type Dir = 'n' | 's' | 'e' | 'w'
+type MCell = { n: boolean; e: boolean; s: boolean; w: boolean }
+const OPP: Record<Dir, Dir> = { n: 's', s: 'n', e: 'w', w: 'e' }
+const MAZE_BASE = 11
+const MAZE_CAP = 21
+
+// Randomized depth-first carve (recursive backtracker). Produces a "perfect"
+// maze: every cell reachable, exactly one path between any two, always solvable.
+function genMaze(size: number): MCell[][] {
+  const cells: MCell[][] = Array.from({ length: size }, () =>
+    Array.from({ length: size }, () => ({ n: true, e: true, s: true, w: true })),
+  )
+  const seen = Array.from({ length: size }, () => Array<boolean>(size).fill(false))
+  const stack: [number, number][] = [[0, 0]]
+  seen[0][0] = true
+  while (stack.length) {
+    const [r, c] = stack[stack.length - 1]
+    const nbrs: [number, number, Dir][] = []
+    if (r > 0 && !seen[r - 1][c]) nbrs.push([r - 1, c, 'n'])
+    if (r < size - 1 && !seen[r + 1][c]) nbrs.push([r + 1, c, 's'])
+    if (c > 0 && !seen[r][c - 1]) nbrs.push([r, c - 1, 'w'])
+    if (c < size - 1 && !seen[r][c + 1]) nbrs.push([r, c + 1, 'e'])
+    if (!nbrs.length) { stack.pop(); continue }
+    const [nr, nc, dir] = nbrs[Math.floor(Math.random() * nbrs.length)]
+    cells[r][c][dir] = false
+    cells[nr][nc][OPP[dir]] = false
+    seen[nr][nc] = true
+    stack.push([nr, nc])
+  }
+  return cells
+}
+
+const sizeForLevel = (lvl: number) => Math.min(MAZE_BASE + (lvl - 1), MAZE_CAP)
+
+// per-level palettes (cycled by level) - distinct but kept muted + paper-friendly
+const MAZE_THEMES = [
+  { wall: '#1A1815', accent: '#B8541F', exit: '#E8743A', tint: '#FBF9F4' }, // ink & rust
+  { wall: '#1C2A22', accent: '#3F7A57', exit: '#6CB088', tint: '#F1F6F2' }, // moss
+  { wall: '#15252E', accent: '#2F6E89', exit: '#5BA6C2', tint: '#EEF4F6' }, // tidewater
+  { wall: '#2A2114', accent: '#9A7327', exit: '#CCA14A', tint: '#F7F3E9' }, // ochre
+  { wall: '#2A1620', accent: '#9C4368', exit: '#C9718F', tint: '#F8F0F2' }, // rosewood
+  { wall: '#1E2230', accent: '#46557F', exit: '#7585AE', tint: '#EFF1F6' }, // slate
+]
+
+// compact hex encoding of the wall layout (one nibble per cell: n=1 e=2 s=4 w=8)
+function encodeMaze(m: MCell[][]): string {
+  let s = ''
+  for (const row of m) for (const cell of row) s += ((cell.n ? 1 : 0) | (cell.e ? 2 : 0) | (cell.s ? 4 : 0) | (cell.w ? 8 : 0)).toString(16)
+  return s
+}
+
+function MazeApp({ active = true }: { active?: boolean }) {
+  const [maze, setMaze] = useState<MCell[][]>(() => genMaze(MAZE_BASE))
+  const [pos, setPos] = useState({ r: 0, c: 0 })
+  const [trail, setTrail] = useState<Set<string>>(() => new Set(['0,0']))
+  const [moves, setMoves] = useState(0)
+  const [level, setLevel] = useState(1)
+  const [won, setWon] = useState(false)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const size = maze.length
+  const theme = MAZE_THEMES[(level - 1) % MAZE_THEMES.length]
+
+  // in-game data-collection consent: shows a notice until the player chooses.
+  const [consent, setConsent] = useState<'agreed' | 'declined' | null>(() => {
+    try {
+      const v = localStorage.getItem('neo-maze-consent')
+      return v === 'agreed' || v === 'declined' ? v : null
+    } catch { return null }
+  })
+  const choose = (v: 'agreed' | 'declined') => {
+    setConsent(v)
+    try { localStorage.setItem('neo-maze-consent', v) } catch { /* private mode */ }
+    boxRef.current?.focus({ preventScroll: true })
+  }
+
+  // refs so the (long-lived) key handler always reads fresh state
+  const stateRef = useRef({ pos, maze, won, level, decided: consent !== null })
+  useEffect(() => { stateRef.current = { pos, maze, won, level, decided: consent !== null } })
+  // per-run play log (consent-gated when recorded): path, pacing, wrong turns
+  const playRef = useRef({ path: '', dts: [] as number[], bumps: 0, start: Date.now(), last: Date.now() })
+
+  const startLevel = useCallback((lvl: number) => {
+    setMaze(genMaze(sizeForLevel(lvl)))
+    setPos({ r: 0, c: 0 })
+    setTrail(new Set(['0,0']))
+    setMoves(0)
+    setWon(false)
+    setLevel(lvl)
+    playRef.current = { path: '', dts: [], bumps: 0, start: Date.now(), last: Date.now() }
+  }, [])
+
+  const attemptMove = useCallback((dir: Dir) => {
+    const { pos: p, maze: m, won: w, level: lvl, decided } = stateRef.current
+    if (w || !decided) return // hold moves until the data notice is answered
+    if (m[p.r][p.c][dir]) { playRef.current.bumps++; return } // wall: a wrong turn
+    const nr = p.r + (dir === 'n' ? -1 : dir === 's' ? 1 : 0)
+    const nc = p.c + (dir === 'w' ? -1 : dir === 'e' ? 1 : 0)
+    const now = Date.now()
+    const pl = playRef.current
+    pl.dts.push(now - pl.last); pl.last = now; pl.path += dir
+    setPos({ r: nr, c: nc })
+    setTrail((t) => new Set(t).add(nr + ',' + nc))
+    setMoves((mv) => mv + 1)
+    if (nr === m.length - 1 && nc === m.length - 1) {
+      setWon(true)
+      recordMazeRun({ level: lvl, size: m.length, moves: pl.path.length, bumps: pl.bumps, ms: now - pl.start, path: pl.path, dts: pl.dts, maze: encodeMaze(m), startedAt: pl.start })
+    }
+  }, [])
+
+  // solved: show the badge, then carve the next (slightly larger) maze
+  useEffect(() => {
+    if (!won) return
+    const t = setTimeout(() => startLevel(level + 1), 950)
+    return () => clearTimeout(t)
+  }, [won, level, startLevel])
+
+  // keep keyboard focus on the board while the window is open
+  useEffect(() => { if (active) boxRef.current?.focus({ preventScroll: true }) }, [active])
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const k = e.key
+    const dir: Dir | null =
+      k === 'ArrowUp' || k === 'w' || k === 'W' ? 'n' :
+      k === 'ArrowDown' || k === 's' || k === 'S' ? 's' :
+      k === 'ArrowLeft' || k === 'a' || k === 'A' ? 'w' :
+      k === 'ArrowRight' || k === 'd' || k === 'D' ? 'e' : null
+    if (!dir) return
+    e.preventDefault()
+    attemptMove(dir)
+  }
+
+  // walls as one path: per-cell N + W covers internals + top/left border;
+  // last row's S and last col's E close the bottom/right border.
+  const wallPath = useMemo(() => {
+    let d = ''
+    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
+      if (maze[r][c].n) d += `M${c} ${r}L${c + 1} ${r}`
+      if (maze[r][c].w) d += `M${c} ${r}L${c} ${r + 1}`
+    }
+    for (let c = 0; c < size; c++) if (maze[size - 1][c].s) d += `M${c} ${size}L${c + 1} ${size}`
+    for (let r = 0; r < size; r++) if (maze[r][size - 1].e) d += `M${size} ${r}L${size} ${r + 1}`
+    return d
+  }, [maze, size])
+
+  const pad = (dir: Dir, glyph: string, label: string) => (
+    <button
+      aria-label={label}
+      onClick={() => { attemptMove(dir); boxRef.current?.focus({ preventScroll: true }) }}
+      className="w-9 h-9 flex items-center justify-center rounded-md border border-[#E6E1D6] bg-[#FBF9F4] text-[#4A463F] hover:text-[#B8541F] hover:border-[#DDD7CA] active:scale-90 transition-[color,transform,border-color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]"
+    >{glyph}</button>
+  )
+
+  return (
+    <div ref={boxRef} tabIndex={0} onKeyDown={onKeyDown} className="relative h-full flex flex-col bg-white select-none focus-visible:[outline-offset:-3px]">
+      <div className="shrink-0 px-5 pt-4 pb-3 flex items-end justify-between gap-3 border-b border-[#E6E1D6]">
+        <div>
+          <p className="field-label text-[#B8541F]">Diversion</p>
+          <h2 className="mt-1 font-sans text-[1.3rem] font-medium tracking-tight text-[#1A1815]">Labyrinth</h2>
+        </div>
+        <div className="flex items-center gap-4 field-label pb-0.5">
+          <span>Level <span className="text-[#1A1815] tabular-nums">{level}</span></span>
+          <span>Moves <span className="text-[#1A1815] tabular-nums">{moves}</span></span>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 flex items-center justify-center p-4">
+        <div className="relative rounded-[10px]" style={{ height: '100%', aspectRatio: '1 / 1', maxWidth: '100%', background: theme.tint, transition: 'background var(--dur-glide) var(--ease-press)' }}>
+          <svg viewBox={`-0.2 -0.2 ${size + 0.4} ${size + 0.4}`} className="w-full h-full block" preserveAspectRatio="xMidYMid meet" aria-label={`Maze, level ${level}`}>
+            {/* trail */}
+            {[...trail].map((key) => {
+              const [r, c] = key.split(',').map(Number)
+              if (r === pos.r && c === pos.c) return null
+              return <rect key={key} x={c + 0.16} y={r + 0.16} width={0.68} height={0.68} rx={0.12} fill={theme.accent} opacity={0.12} />
+            })}
+            {/* exit */}
+            <rect x={size - 1 + 0.2} y={size - 1 + 0.2} width={0.6} height={0.6} rx={0.12} fill="none" stroke={theme.exit} strokeWidth={0.12} />
+            <circle cx={size - 0.5} cy={size - 0.5} r={0.12} fill={theme.exit} />
+            {/* walls */}
+            <path d={wallPath} stroke={theme.wall} strokeWidth={0.16} strokeLinecap="round" fill="none" />
+            {/* explorer */}
+            <circle cx={pos.c + 0.5} cy={pos.r + 0.5} r={0.28} fill={theme.accent} />
+          </svg>
+          {won && (
+            <div aria-hidden className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="tab-fade rounded-full bg-[#1A1815] px-4 py-2 field-label text-[#F5F2EB]" style={{ boxShadow: 'var(--elev-4)' }}>Level {level} solved</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* screen-reader feedback for the solve / new level (the visual badge is aria-hidden) */}
+      <span className="sr-only" role="status" aria-live="polite">{won ? `Level ${level} solved` : `Level ${level}`}</span>
+
+      <div className="shrink-0 px-5 pt-3 pb-4 flex items-center justify-between gap-4 border-t border-[#E6E1D6]">
+        <div className="flex items-center gap-4">
+          <button onClick={() => { startLevel(level); boxRef.current?.focus({ preventScroll: true }) }} className="field-label text-[#1A1815] hover:text-[#B8541F] transition-colors">New maze</button>
+          <button onClick={() => setConsent(null)} className="field-label text-[#807A70] hover:text-[#B8541F] transition-colors">Data terms</button>
+        </div>
+        <div className="grid grid-cols-3 grid-rows-2 gap-1.5">
+          <span />{pad('n', '↑', 'Move up')}<span />
+          {pad('w', '←', 'Move left')}{pad('s', '↓', 'Move down')}{pad('e', '→', 'Move right')}
+        </div>
+      </div>
+
+      {/* in-game data notice: read the terms, then Agree or Disagree (you can play either way) */}
+      {consent === null && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-5 bg-[#1A1815]/35 backdrop-blur-[2px]">
+          <div role="dialog" aria-modal="true" aria-label="Maze data notice" className="tab-fade w-full max-w-sm rounded-xl bg-[#FBF9F4] border border-[#E6E1D6] p-6" style={{ boxShadow: 'var(--elev-5)' }}>
+            <p className="field-label text-[#B8541F]">Maze data notice</p>
+            <h3 className="mt-2 font-sans text-[1.35rem] font-medium tracking-tight text-[#1A1815]">Before you play.</h3>
+            <p className="mt-3 text-sm leading-relaxed text-[#4A463F]">
+              This maze records how it is played, the moves you make, your timing, and the wrong turns, so we can study how people solve mazes and improve our models. It collects no name, no email, and nothing that identifies you.
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-[#4A463F]">
+              You can play either way. If you disagree, the game still works and records nothing. See the{' '}
+              <button onClick={() => window.dispatchEvent(new CustomEvent('neo-open', { detail: 'privacy' }))} className="text-[#1A1815] underline decoration-[#CCC6BA] underline-offset-2 hover:text-[#B8541F] transition-colors">Privacy</button>{' '}and{' '}
+              <button onClick={() => window.dispatchEvent(new CustomEvent('neo-open', { detail: 'terms' }))} className="text-[#1A1815] underline decoration-[#CCC6BA] underline-offset-2 hover:text-[#B8541F] transition-colors">Terms</button>{' '}for the full detail.
+            </p>
+            <div className="mt-5 flex items-center gap-4">
+              <button onClick={() => choose('agreed')} className="rounded-full bg-[#1A1815] px-5 py-2 text-[0.78rem] font-medium text-[#F5F2EB] hover:bg-[#2A2723] active:scale-95 transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]">Agree</button>
+              <button onClick={() => choose('declined')} className="field-label text-[#807A70] hover:text-[#B8541F] transition-colors">Disagree</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1325,4 +1576,5 @@ export const APPS: AppDef[] = [
   { id: 'privacy', title: 'Privacy', code: 'NOTES', w: 600, h: 560, x: 420, y: 168, Body: PrivacyApp },
   { id: 'terms', title: 'Terms', code: 'TOS', w: 640, h: 600, x: 440, y: 186, Body: TermsApp },
   { id: 'news', title: 'News', code: 'WIRE', w: 560, h: 480, x: 460, y: 204, Body: NewsApp },
+  { id: 'maze', title: 'Maze', code: 'GAME', w: 560, h: 620, x: 300, y: 96, Body: MazeApp },
 ]

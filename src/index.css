@@ -29,6 +29,105 @@
   --color-primary-hover: #8B3F13;
 }
 
+/* ============================================================
+   System tokens (polish Phase 1) - one motion, light, and type
+   vocabulary the whole OS composes from. Raw custom properties in
+   :root (deliberately NOT @theme, so Tailwind emits no unused
+   utility classes for them).
+   ============================================================ */
+:root {
+  /* Motion - two house curves + two durations. --ease-press is the
+     existing site curve; --ease-settle is the boot splash's own
+     overshoot (see the bs-* keyframes) so window landings register
+     with the same snap as the wake. */
+  --ease-press: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-settle: cubic-bezier(0.34, 1.42, 0.5, 1);
+  --dur-tap: 140ms;
+  --dur-glide: 380ms;
+
+  /* Light - one warm lamp, upper-left. Every step offsets down-and-
+     right and is tinted with ink rgba(26,24,21), never neutral or
+     blue black, so plates read as paper on a lit bench. --rim is the
+     upper-left highlight, --occlusion the lower-right contact edge. */
+  --elev-1: 0 1px 2px -1px rgba(26, 24, 21, 0.10), 0 1px 3px rgba(26, 24, 21, 0.05);
+  --elev-2: 0 2px 4px -2px rgba(26, 24, 21, 0.12), 0 4px 10px -4px rgba(26, 24, 21, 0.10);
+  --elev-3: 0 3px 6px -3px rgba(26, 24, 21, 0.16), 0 8px 20px -8px rgba(26, 24, 21, 0.16);
+  --elev-4: 0 5px 10px -5px rgba(26, 24, 21, 0.18), 0 16px 34px -14px rgba(26, 24, 21, 0.22);
+  --elev-5: 0 2px 4px -2px rgba(26, 24, 21, 0.10), 0 28px 60px -22px rgba(26, 24, 21, 0.34);
+  --rim: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --occlusion: inset 0 -1px 0 rgba(26, 24, 21, 0.06);
+
+  /* Type scale - paired size / line-height. Fraunces (via --font-sans)
+     is deliberately the display serif here; do not "fix" it to a sans.
+     Weights 300 / 500 are present in the self-hosted woff2 set. */
+  --t-display: clamp(2.6rem, 4.4vw, 3.4rem);  --lh-display: 1.02;
+  --t-title: 1.8rem;   --lh-title: 1.12;
+  --t-h2: 1.35rem;     --lh-h2: 1.2;
+  --t-h3: 1.05rem;     --lh-h3: 1.3;
+  --t-body: 0.95rem;   --lh-body: 1.6;
+  --t-cap: 0.62rem;    --lh-cap: 1.4;
+
+  /* Registration tick - the edition-frame corner color. Resting ink
+     tint by default; flicks rust on a plate landing (Phase 6). */
+  --tick: rgba(26, 24, 21, 0.28);
+}
+
+/* Type objects - the three faces set once. .field-label is the
+   keystone mono micro-label; its tone is overridable via --label-tone
+   so rust / ink variants are tone changes, not new classes. */
+@layer components {
+  .t-display {
+    font-family: var(--font-sans);
+    font-weight: 300;
+    font-optical-sizing: auto;
+    font-size: var(--t-display);
+    line-height: var(--lh-display);
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+  .t-title {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-optical-sizing: auto;
+    font-size: var(--t-title);
+    line-height: var(--lh-title);
+    letter-spacing: -0.02em;
+  }
+  .field-label {
+    font-family: var(--font-mono);
+    font-size: var(--t-cap);
+    line-height: var(--lh-cap);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--label-tone, #928C82);
+  }
+  /* Material focus - the focused window title is struck into the label
+     stock (ink with a hairline highlight below). Unfocused titles drop it. */
+  .deboss {
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+  }
+  /* One treatment for honesty / illustrative notes - mono, muted,
+     a hair rule above. Sentence case (no uppercase): it carries copy,
+     not a label. */
+  .footnote {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    line-height: 1.6;
+    color: #928C82;
+    border-top: 1px solid var(--color-line);
+    padding-top: 0.75rem;
+  }
+}
+
+/* Plate landing tick - rust flick then back to rest. Driven via the
+   --tick var so the resting color stays in one place. Consumed by
+   PlateFrame in Phase 6; neutralized by the reduced-motion block. */
+@keyframes tick-flash {
+  0%   { color: var(--tick); }
+  35%  { color: #B8541F; }
+  100% { color: var(--tick); }
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
@@ -192,6 +291,12 @@
 @keyframes tab-fade {
   0% { opacity: 0; transform: translateY(4px); }
   100% { opacity: 1; transform: translateY(0); }
+}
+
+/* command palette entrance - a short rise that settles (frosted-vellum panel) */
+@keyframes palette-rise {
+  0% { opacity: 0; transform: translateY(6px) scale(0.99); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* Respect users who prefer reduced motion */
