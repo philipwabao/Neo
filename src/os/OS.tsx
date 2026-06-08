@@ -45,7 +45,8 @@ function makeInit(): State {
     wins[a.id] = { id: a.id, x: cx + i * 44, y: a.y + i * 44, w: a.w, h: a.h, z: 0, open: false, minimized: false, zoomed: false, prev: null }
   })
   const route = routeId()
-  if (wins[route]) {
+  const routeMobileBlocked = route === 'terminal' && vw < 768
+  if (wins[route] && !routeMobileBlocked) {
     wins[route] = { ...wins[route], open: true, z: 1 }
     return { wins, topZ: 1, focused: route }
   }
@@ -191,8 +192,9 @@ function PlateWindow({ app, win, focused, dispatch, iconPos }: { app: AppDef; wi
   return (
     <div
       ref={ref}
-      role="dialog"
-      aria-label={app.title}
+      role={visible ? 'dialog' : undefined}
+      aria-label={visible ? app.title : undefined}
+      inert={!visible}
       onPointerDown={() => dispatch({ t: 'focus', id: app.id })}
       className="absolute top-0 left-0 flex flex-col rounded-[5px] bg-white border border-[#E6E1D6] overflow-hidden"
       style={{
@@ -230,7 +232,7 @@ function PlateWindow({ app, win, focused, dispatch, iconPos }: { app: AppDef; wi
 
       {/* content */}
       <div className="flex-1 min-h-0 overflow-hidden select-text">
-        <app.Body />
+        <app.Body active={visible} />
       </div>
 
       {/* resize handles */}
@@ -291,7 +293,7 @@ function Header({ openApp, onPalette }: { openApp: (id: string) => void; onPalet
         2026
       </span>
       <div className="ml-auto flex items-center gap-3.5">
-        <button onClick={onPalette} className="hidden sm:inline-flex items-center rounded-md border border-[#3A352F] px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-[0.12em] text-[#F5F2EB] hover:border-[#4A453F] transition-colors">D</button>
+        <button onClick={onPalette} aria-label="Open command palette" title="Command palette (⌘K)" className="hidden sm:inline-flex items-center rounded-md border border-[#3A352F] px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-[0.12em] text-[#F5F2EB] hover:border-[#4A453F] transition-colors">D</button>
         <span className="font-mono font-bold text-[11px] uppercase tracking-[0.14em] text-[#F5F2EB] tabular-nums">{fmtClock(now)}</span>
       </div>
     </div>
@@ -529,13 +531,13 @@ function useIsMobile() {
   return m
 }
 
-function MobileSheet({ app, visible, dispatch }: { app: AppDef; visible: boolean; dispatch: (a: Action) => void }) {
+function MobileSheet({ app, visible, dispatch, bannerH }: { app: AppDef; visible: boolean; dispatch: (a: Action) => void; bannerH: number }) {
   return (
     <div
-      className="fixed inset-x-0 top-12 bottom-0 z-[20] flex-col bg-white"
-      style={{ display: visible ? 'flex' : 'none' }}
-      role="dialog"
-      aria-label={app.title}
+      className="fixed inset-x-0 top-12 z-[20] flex-col bg-white"
+      style={{ display: visible ? 'flex' : 'none', bottom: bannerH }}
+      role={visible ? 'dialog' : undefined}
+      aria-label={visible ? app.title : undefined}
     >
       <div className="shrink-0 h-11 flex items-center gap-2.5 px-4 bg-[#EFEBE2] border-b border-[#E6E1D6]" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)' }}>
         <span className="font-sans text-[14px] font-semibold tracking-tight text-[#1A1815] truncate">{app.title}</span>
@@ -543,7 +545,7 @@ function MobileSheet({ app, visible, dispatch }: { app: AppDef; visible: boolean
         <span className="flex-1" />
         <button aria-label="Close" onClick={() => dispatch({ t: 'close', id: app.id })} className="w-7 h-7 flex items-center justify-center rounded-full text-[#807A70] hover:text-[#B8541F] hover:bg-[#F4E3DA] transition-colors">{Cross}</button>
       </div>
-      <div className="flex-1 min-h-0 overflow-hidden select-text"><app.Body /></div>
+      <div className="flex-1 min-h-0 overflow-hidden select-text"><app.Body active={visible} /></div>
     </div>
   )
 }
@@ -572,6 +574,8 @@ function MobileHome({ openApp }: { openApp: (id: string) => void }) {
 export default function OS() {
   const [state, dispatch] = useReducer(reducer, undefined, makeInit)
   const openApp = useCallback((id: string) => {
+    // Terminal is desktop-only; ignore deep links / palette opens on a phone.
+    if (id === 'terminal' && typeof window !== 'undefined' && window.innerWidth < 768) return
     dispatch({ t: 'open', id })
     const path = '/' + id
     if (window.location.pathname !== path) window.history.pushState(null, '', path)
@@ -580,9 +584,13 @@ export default function OS() {
   const [palette, setPalette] = useState(false)
   const isMobile = useIsMobile()
   const [booted, setBooted] = useState(() => typeof sessionStorage !== 'undefined' && sessionStorage.getItem('neo-booted') === '1')
+  const [bannerH, setBannerH] = useState(0)
   const iconPos = useRef<Record<string, { x: number; y: number }>>(
     Object.fromEntries(DESKTOP_ICONS.map((i) => [i.id, { x: iconStartX(i) + 40, y: i.y + 28 }])),
   )
+  // mirror of state.focused for the popstate handler (which is bound once)
+  const focusedRef = useRef(state.focused)
+  useEffect(() => { focusedRef.current = state.focused }, [state.focused])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -603,13 +611,20 @@ export default function OS() {
     return () => window.removeEventListener('neo-open', onOpen)
   }, [openApp])
 
+  // the consent banner reports its footprint; the mobile sheet lifts clear of it
+  useEffect(() => {
+    const onShown = (e: Event) => setBannerH(Number((e as CustomEvent).detail) || 0)
+    window.addEventListener('neo-consent-shown', onShown)
+    return () => window.removeEventListener('neo-consent-shown', onShown)
+  }, [])
+
   // deep-link routing: set the initial title, reset the URL on an empty
   // desktop, and follow browser back / forward between app drawers.
   useEffect(() => { document.title = titleFor(state.focused) }, [])
 
   useEffect(() => {
     if (state.focused === null && window.location.pathname !== '/') {
-      window.history.pushState(null, '', '/')
+      window.history.replaceState(null, '', '/')
       document.title = 'Neognathae'
     }
   }, [state.focused])
@@ -617,7 +632,9 @@ export default function OS() {
   useEffect(() => {
     const onPop = () => {
       const id = window.location.pathname.replace(/^\/+/, '').toLowerCase()
-      if (APPS.some((a) => a.id === id)) openApp(id)
+      const routable = APPS.some((a) => a.id === id) && !(id === 'terminal' && window.innerWidth < 768)
+      if (routable) openApp(id)
+      else if (focusedRef.current) dispatch({ t: 'close', id: focusedRef.current })
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
@@ -636,7 +653,7 @@ export default function OS() {
           <>
             <MobileHome openApp={openApp} />
             {APPS.filter((app) => app.id !== 'terminal').map((app) => (
-              <MobileSheet key={app.id} app={app} visible={state.focused === app.id && state.wins[app.id].open} dispatch={dispatch} />
+              <MobileSheet key={app.id} app={app} visible={state.focused === app.id && state.wins[app.id].open} dispatch={dispatch} bannerH={bannerH} />
             ))}
           </>
         ) : (

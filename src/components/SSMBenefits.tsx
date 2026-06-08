@@ -91,7 +91,7 @@ export default function SSMBenefits() {
                 Classification accuracy
               </h4>
               <p className="text-[0.65rem] font-mono text-[#928C82] mt-1">
-                Internal benchmark, on held-out real-world text
+                Illustrative, showing the shape of a typical result
               </p>
             </div>
 
@@ -117,9 +117,8 @@ export default function SSMBenefits() {
             </div>
 
             <p className="mt-6 pt-5 border-t border-[#E6E1D6] text-[0.6rem] leading-relaxed text-[#928C82]">
-              Figures reflect internal evaluation on real-world data with simulated
-              labeled pairs, not customer data. Accuracy on customer data is
-              established per deployment.
+              These figures are illustrative, not a measured benchmark. Accuracy on
+              your data is established per deployment, before anything goes live.
             </p>
           </div>
         </div>

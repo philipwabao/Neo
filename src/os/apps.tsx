@@ -12,7 +12,7 @@ export type AppDef = {
   h: number
   x: number
   y: number
-  Body: ComponentType
+  Body: ComponentType<{ active?: boolean }>
 }
 
 function Eyebrow({ children }: { children: ReactNode }) {
@@ -801,21 +801,24 @@ export const KESTREL_TABS = ['Plate', 'Try it', 'Uses', 'Method', 'Pricing', 'Da
 
 function KestrelApp() {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const animRef = useRef(0)
   const scrollToSection = (name: string) => {
     const c = scrollRef.current
-    const el = c?.querySelector(`[data-section="${name}"]`)
+    const el = c?.querySelector(`[data-section="${name}"]`) as HTMLElement | null
     if (!c || !el) return
-    const target = el.getBoundingClientRect().top - c.getBoundingClientRect().top + c.scrollTop
+    cancelAnimationFrame(animRef.current)
     const start = c.scrollTop
-    const dist = target - start
+    // offsetTop is transform-invariant (the container is position: relative),
+    // so this stays correct even while the window is mid genie-scale on open.
+    const dist = el.offsetTop - start
     let t0 = 0
     const step = (ts: number) => {
       if (!t0) t0 = ts
       const p = Math.min(1, (ts - t0) / 420)
       c.scrollTop = start + dist * (1 - Math.pow(1 - p, 3))
-      if (p < 1) requestAnimationFrame(step)
+      if (p < 1) animRef.current = requestAnimationFrame(step)
     }
-    requestAnimationFrame(step)
+    animRef.current = requestAnimationFrame(step)
   }
   useEffect(() => {
     const h = (e: Event) => { const d = (e as CustomEvent).detail; if (typeof d === 'string') scrollToSection(d) }
@@ -824,7 +827,7 @@ function KestrelApp() {
   }, [])
 
   return (
-    <div ref={scrollRef} className="neo-scroll h-full overflow-auto bg-white">
+    <div ref={scrollRef} className="neo-scroll relative h-full overflow-auto bg-white">
       <section data-section="Plate" className="p-6 md:p-8 flex flex-col sm:flex-row gap-6">
         <div className="w-full sm:w-[220px] shrink-0">
           <div className="group rounded-xl overflow-hidden border border-[#E6E1D6]"><SpecimenPlate /></div>
@@ -1285,12 +1288,14 @@ function TermsApp() {
 }
 
 /* ── News (placeholder, no content yet) ── */
-function NewsApp() {
+function NewsApp({ active = true }: { active?: boolean }) {
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
+    if (!active) return
+    setNow(new Date())
     const t = setInterval(() => setNow(new Date()), 30000)
     return () => clearInterval(t)
-  }, [])
+  }, [active])
   const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
   const mos = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
   const stamp = `${days[now.getDay()]} ${now.getDate()} ${mos[now.getMonth()]} ${now.getFullYear()} · ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
@@ -1313,7 +1318,7 @@ function NewsApp() {
 
 export const APPS: AppDef[] = [
   { id: 'kestrel', title: 'Kestrel', code: 'NEO-001', w: 900, h: 640, x: 280, y: 84, Body: KestrelApp },
-  { id: 'catalogue', title: 'Catalogue', code: 'FAMILY', w: 820, h: 600, x: 360, y: 120, Body: CatalogueApp },
+  { id: 'catalogue', title: 'Catalogue', code: 'MODELS', w: 820, h: 600, x: 360, y: 120, Body: CatalogueApp },
   { id: 'terminal', title: 'Terminal', code: 'SHELL', w: 680, h: 460, x: 320, y: 150, Body: Terminal },
   { id: 'contact', title: 'Contact', code: 'CONTACT', w: 560, h: 520, x: 380, y: 132, Body: ContactApp },
   { id: 'auxerta', title: 'Auxerta', code: 'LAB', w: 560, h: 520, x: 400, y: 150, Body: AuxertaApp },
