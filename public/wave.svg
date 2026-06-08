@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 240" preserveAspectRatio="none" fill="none">
+  <defs>
+    <linearGradient id="wfront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1A1815" />
+      <stop offset="100%" stop-color="#1A1815" />
+    </linearGradient>
+  </defs>
+  <!-- back crest (faintest, rises highest into the white) -->
+  <path d="M0,70 C 300,30 540,100 720,70 C 900,40 1140,95 1440,62 L1440,240 L0,240 Z" fill="#1A1815" fill-opacity="0.12" />
+  <!-- middle crest -->
+  <path d="M0,112 C 320,76 600,134 900,112 C 1150,94 1330,128 1440,110 L1440,240 L0,240 Z" fill="#1A1815" fill-opacity="0.22" />
+  <!-- front wave (the solid navy sea) -->
+  <path d="M0,150 C 240,126 500,168 720,150 C 980,130 1220,164 1440,146 L1440,240 L0,240 Z" fill="url(#wfront)" />
+</svg>

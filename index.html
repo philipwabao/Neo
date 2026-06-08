@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/bird.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Google tag (gtag.js) with Consent Mode v2 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-R8SW9W01E2"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+
+    // Consent Mode v2: deny by default so no analytics cookies are set
+    // until the visitor agrees through the consent banner.
+    gtag('consent', 'default', {
+      'ad_storage': 'denied',
+      'ad_user_data': 'denied',
+      'ad_personalization': 'denied',
+      'analytics_storage': 'denied'
+    });
+    // Re-apply a previously granted choice before configuring.
+    try {
+      if (localStorage.getItem('neo-consent') === 'granted') {
+        gtag('consent', 'update', { 'analytics_storage': 'granted' });
+      }
+    } catch (e) {}
+
+    gtag('js', new Date());
+    gtag('config', 'G-R8SW9W01E2');
+  </script>
+
+  <!-- SEO & Social Sharing -->
+  <meta name="description"
+    content="Neognathae is a small, growing family of focused AI products by Auxerta. Kestrel, for text classification, is the first." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Neognathae — Focused AI products" />
+  <meta property="og:description"
+    content="A small, growing family of focused AI products by Auxerta. Kestrel, for text classification, is the first." />
+  <meta property="og:url" content="https://neognathae.com" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Neognathae — Focused AI products" />
+  <meta name="twitter:description"
+    content="A small, growing family of focused AI products by Auxerta. Kestrel, for text classification, is the first." />
+
+  <!-- Fonts: self-hosted (Fraunces, Hanken Grotesk, Spline Sans Mono); no third-party request. -->
+  <link rel="stylesheet" href="/fonts/fonts.css">
+
+  <title>Neognathae — Focused AI products</title>
+</head>
+
+<body class="page-fade-in">
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

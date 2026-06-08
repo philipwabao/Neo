@@ -1,0 +1,223 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Neognathae - focused AI products.
+   Modern, near-monochrome. Fraunces (display serif) for statements,
+   Hanken Grotesk (grotesque sans) for UI & body, Spline Sans Mono
+   for labels. Rust is the single accent, used sparingly.
+   ============================================================ */
+
+@theme {
+  /* Type - `font-sans` is the display serif (Fraunces); body is the
+     grotesque sans set on <body>; `font-mono` is the label face. */
+  --font-sans: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-newsreader: "Fraunces", Georgia, serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, "SFMono-Regular", "Menlo", monospace;
+
+  /* Palette - warm off-white, near-black ink, one rust accent */
+  --color-paper: #F5F2EB;
+  --color-paper-2: #EFEBE2;
+  --color-ink: #1A1815;
+  --color-ink-soft: #4A463F;
+  --color-ink-mute: #6B6760;
+  --color-line: #E6E1D6;
+  --color-rust: #B8541F;
+  --color-rust-deep: #8B3F13;
+
+  --color-primary: #B8541F;
+  --color-primary-hover: #8B3F13;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    background-color: var(--color-paper);
+  }
+
+  body {
+    font-family: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-weight: 400;
+    color: var(--color-ink);
+    background-color: var(--color-paper);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Fraunces is variable + optical - let it tune contrast to size */
+  h1, h2, h3, h4, .font-sans {
+    font-optical-sizing: auto;
+  }
+
+  /* Display headings: tighten the air, balance the rag */
+  h1, h2 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+
+  /* Keyboard focus ring - visible only for keyboard users */
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-rust);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+}
+
+@layer utilities {
+  /* Staggered page-load reveal - pair with inline animation-delay */
+  .reveal {
+    opacity: 0;
+    animation: rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .animate-fade-in-up {
+    opacity: 0;
+    animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .page-fade-in {
+    animation: page-load 0.5s ease-out forwards;
+  }
+}
+
+@keyframes rise {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in-up {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes page-load {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* ============================================================
+   Boot splash - Cabinet Wake (Assembly). The flock assembles
+   shard by shard on the paper ground, the lead shard warming to
+   rust, a registration baseline draws, then the wordmark rises.
+   ============================================================ */
+.bsplash {
+  position: fixed; inset: 0; z-index: 1300;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: var(--color-paper);
+  pointer-events: auto; cursor: default;
+}
+.bsplash.is-exiting {
+  animation: bs-exit 260ms cubic-bezier(0.5, 0.05, 0.2, 1) forwards;
+  pointer-events: none;
+}
+@keyframes bs-exit {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+
+.bsplash svg {
+  width: clamp(66px, 9vw, 96px); height: auto;
+  color: var(--color-ink); overflow: visible;
+}
+.bsplash g { transform-box: fill-box; }
+
+.bs-base { transform-origin: 50% 50%; opacity: 0;
+  animation: bs-base 340ms cubic-bezier(0.34, 1.42, 0.5, 1) 0ms both; }
+.bs-mid { transform-origin: 50% 50%; opacity: 0;
+  animation: bs-mid 360ms cubic-bezier(0.34, 1.42, 0.5, 1) 340ms both; }
+.bs-lead { transform-origin: 50% 50%; opacity: 0;
+  animation: bs-lead 380ms cubic-bezier(0.34, 1.42, 0.5, 1) 700ms both; }
+
+@keyframes bs-base {
+  0% { opacity: 0; transform: translateY(14px) rotate(-3deg); }
+  70% { opacity: 1; transform: translateY(-2px) rotate(0.6deg); }
+  100% { opacity: 1; transform: translateY(0) rotate(0); }
+}
+@keyframes bs-mid {
+  0% { opacity: 0; transform: translateX(18px) rotate(-4deg); }
+  70% { opacity: 1; transform: translateX(-3px) rotate(1deg); }
+  100% { opacity: 1; transform: translateX(0) rotate(0); }
+}
+@keyframes bs-lead {
+  0% { opacity: 0; transform: translate(12px, -16px) rotate(6deg); }
+  70% { opacity: 1; transform: translate(-2px, 2px) rotate(-1deg); }
+  100% { opacity: 1; transform: translate(0, 0) rotate(0); }
+}
+
+.bs-lead path { animation: bs-leadfill 300ms ease-out 700ms both; }
+@keyframes bs-leadfill { 0% { fill: #1A1815; } 100% { fill: #E8743A; } }
+
+.bs-line {
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: bs-draw 220ms ease-out 1080ms forwards;
+}
+@keyframes bs-draw { to { stroke-dashoffset: 0; } }
+
+.bs-word { opacity: 0;
+  font-family: var(--font-sans); font-weight: 600;
+  letter-spacing: -0.02em; color: var(--color-ink);
+  font-size: clamp(1.05rem, 2.4vw, 1.4rem); margin-top: 0.7rem;
+  animation: bs-rise 500ms cubic-bezier(0.16, 1, 0.3, 1) 1180ms forwards;
+}
+@keyframes bs-rise {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   Scrollbars - thin, warm, in-brand. Opt-in via .neo-scroll on
+   the OS plate-window and panel scroll regions.
+   ============================================================ */
+.neo-scroll { scrollbar-width: thin; scrollbar-color: #C8BFAE transparent; }
+.neo-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.neo-scroll::-webkit-scrollbar-track { background: transparent; }
+.neo-scroll::-webkit-scrollbar-thumb {
+  background-color: #C8BFAE;
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.neo-scroll::-webkit-scrollbar-thumb:hover { background-color: var(--color-rust); }
+.neo-scroll::-webkit-scrollbar-corner { background: transparent; }
+
+/* Tab / panel crossfade - key the panel by tab so it replays */
+.tab-fade { animation: tab-fade 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes tab-fade {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .reveal,
+  .animate-fade-in-up {
+    opacity: 1 !important;
+  }
+
+  /* boot splash: show the finished static mark, lead already rust */
+  .bs-base, .bs-mid, .bs-lead, .bs-lead path,
+  .bs-line, .bs-word {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .bs-line { stroke-dashoffset: 0 !important; }
+  .bs-lead path { fill: #E8743A !important; }
+  .bsplash.is-exiting { animation-duration: 150ms !important; }
+}
