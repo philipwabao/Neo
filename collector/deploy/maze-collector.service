@@ -1,4 +1,4 @@
-// NOTE: this is a systemd unit, not JS. Copy to /etc/systemd/system/maze-collector.service
+# Neognathae maze collector - systemd unit. Copy to /etc/systemd/system/maze-collector.service
 [Unit]
 Description=Neognathae maze data collector
 After=network.target
