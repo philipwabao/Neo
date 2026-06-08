@@ -33,9 +33,8 @@ function routeId(): string {
   if (typeof window === 'undefined') return ''
   return window.location.pathname.replace(/^\/+/, '').toLowerCase()
 }
-function titleFor(id: string | null): string {
-  const a = id ? APPS.find((x) => x.id === id) : undefined
-  return a ? `${a.title} · Neognathae` : 'Neognathae'
+function titleFor(_id: string | null): string {
+  return 'Neognathae'
 }
 
 function makeInit(): State {
