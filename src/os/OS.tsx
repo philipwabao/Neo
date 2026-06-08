@@ -353,7 +353,7 @@ function Header({ openApp, onPalette, focusedCode }: { openApp: (id: string) => 
         2026
       </span>
       <div className="ml-auto flex items-center gap-3.5">
-        <button onClick={onPalette} aria-label="Open command palette" title="Command palette (⌘K)" className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-[#3A352F] px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-[0.12em] text-[#CFC8BB] hover:text-[#F5F2EB] hover:border-[#4A453F] active:scale-95 transition-[color,border-color,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]"><span aria-hidden className="text-[#807A70]">⌘</span>K</button>
+        <button onClick={onPalette} aria-label="Open command palette" title="Command palette" className="hidden sm:inline-flex items-center rounded-md border border-[#3A352F] px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-[0.12em] text-[#CFC8BB] hover:text-[#F5F2EB] hover:border-[#4A453F] active:scale-95 transition-[color,border-color,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]">D</button>
         <span className="font-mono font-bold text-[11px] uppercase tracking-[0.14em] text-[#F5F2EB] tabular-nums">{fmtClock(now)}</span>
       </div>
     </div>
