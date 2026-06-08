@@ -1,0 +1,8 @@
+# Caddy gives you automatic HTTPS (free Let's Encrypt cert, auto-renew).
+# Copy to /etc/caddy/Caddyfile, set your real subdomain, then: sudo systemctl reload caddy
+# Requires: a DNS A record for this name pointing at the server's public IP, and
+# inbound 80 + 443 open in the EC2 security group.
+
+collector.neognathae.com {
+	reverse_proxy localhost:8787
+}

@@ -1,0 +1,27 @@
+// NOTE: this is a systemd unit, not JS. Copy to /etc/systemd/system/maze-collector.service
+[Unit]
+Description=Neognathae maze data collector
+After=network.target
+
+[Service]
+Type=simple
+User=maze
+WorkingDirectory=/opt/neo
+# Non-secret config inline; the secret token lives in the EnvironmentFile below.
+Environment=PORT=8787
+Environment=CORS_ORIGIN=https://neognathae.com
+Environment=DATA_FILE=/var/lib/maze/maze-runs.jsonl
+EnvironmentFile=/etc/maze-collector.env
+ExecStart=/usr/bin/node /opt/neo/collector/server.js
+Restart=always
+RestartSec=3
+
+# hardening: the service can only write to its data dir
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/maze
+
+[Install]
+WantedBy=multi-user.target

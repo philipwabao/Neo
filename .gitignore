@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# env + collected data (never commit secrets or the dataset)
+.env
+.env.*
+!.env.example
+collector/data/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
